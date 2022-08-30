@@ -1,11 +1,14 @@
 package main
 
-import "strconv"
+import (
+	"math/rand"
+	"strconv"
+)
 
 func main() {
-	if age, name := 20, "aaa"; age > 10 {
-		println(name + "-" + strconv.Itoa(age+10))
+	if age, desc := rand.Intn(40), "satisfied"; age > 10 {
+		println(desc + "-" + strconv.Itoa(age))
 	} else {
-		println("unsatisfied")
+		println("unsatisfied-" + strconv.Itoa(age))
 	}
 }
