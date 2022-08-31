@@ -25,7 +25,7 @@ func main() {
 
 	//l2()
 
-	l3()
+	//l3()
 }
 
 func l1() {
@@ -49,6 +49,8 @@ func l3() {
 		fmt.Printf("%v\n", err)
 		return
 	}
+	defer logF.Close()
 	logger := log.New(logF, "custom: ", log.LstdFlags|log.Llongfile)
 	logger.Println("custom log")
+	logger.Panic(io.EOF)
 }
