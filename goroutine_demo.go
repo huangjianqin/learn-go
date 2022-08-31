@@ -20,7 +20,7 @@ func main() {
 
 	//g2()
 
-	//g3()
+	g3()
 
 	//g4()
 
@@ -90,15 +90,17 @@ func g21(c chan int, q chan<- bool) {
 func g3() {
 	c := make(chan int)
 	q := make(chan bool)
-	defer close(c)
-	defer close(q)
 
 	go g31(c, q)
 	for {
-		time.Sleep(time.Second)
-		if j := <-c; j%2 == 0 {
+		r := rand.Intn(int(time.Second.Milliseconds()))
+		time.Sleep(time.Duration(r))
+		//如果receiver或sender还没准备好(closed也算是没准备好), 都会阻塞
+		j, ok := <-c
+		if j%2 == 0 || !ok {
 			//通知g31退出
 			q <- true
+			close(q)
 			break
 		}
 	}
@@ -123,8 +125,7 @@ out:
 			println("time out")
 			//结束g3
 			c <- 2
-			//不能加下面这行, 运行会报错, 因为receiver还没准备好, 就把sender关闭了, 会导致消息发不出去
-			//break out
+			close(c)
 		}
 	}
 	println("g31 out")
