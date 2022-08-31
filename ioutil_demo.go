@@ -9,7 +9,7 @@ import (
 func main() {
 	//iu1()
 
-	iu2()
+	//iu2()
 }
 
 func iu1() {
