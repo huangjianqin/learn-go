@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option go_package = "learn-go/grpc-hello/proto";
+package helloworld;
+
+service Greeter {
+  rpc SayHello (HelloRequest) returns (HelloReply) {}
+  rpc KeepSayHello (stream HelloRequest) returns (stream HelloReply) {}
+}
+
+message HelloRequest {
+  string name = 1;
+}
+
+message HelloReply {
+  string message = 1;
+}
