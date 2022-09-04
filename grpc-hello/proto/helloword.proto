@@ -3,6 +3,7 @@ syntax = "proto3";
 option go_package = "learn-go/grpc-hello/proto";
 package helloworld;
 
+//protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative helloword.proto
 service Greeter {
   rpc SayHello (HelloRequest) returns (HelloReply) {}
   rpc KeepSayHello (stream HelloRequest) returns (stream HelloReply) {}
