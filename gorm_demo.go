@@ -83,7 +83,8 @@ func main() {
 	// Migrate the schema
 	db.AutoMigrate(&User{}, &Company{}, &CreditCard{}, &Language{})
 
-	rand.Seed(122150)
+	//真随机
+	rand.Seed(time.Now().UnixNano())
 
 	// Create
 	charBs := []byte("qwertyuiopasdfghjklzxcvbnm1234567890")
