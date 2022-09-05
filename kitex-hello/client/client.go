@@ -3,24 +3,44 @@ package main
 import (
 	"context"
 	"errors"
+	"github.com/bytedance/gopkg/cloud/circuitbreaker"
 	"github.com/bytedance/gopkg/cloud/metainfo"
 	"github.com/cloudwego/kitex/client"
+	"github.com/cloudwego/kitex/pkg/circuitbreak"
 	"github.com/cloudwego/kitex/pkg/endpoint"
 	"github.com/cloudwego/kitex/pkg/kerrors"
 	"github.com/cloudwego/kitex/pkg/klog"
 	"github.com/cloudwego/kitex/pkg/loadbalance"
 	"github.com/cloudwego/kitex/pkg/retry"
+	"github.com/cloudwego/kitex/pkg/rpcinfo"
 	"learn-go/kitex-hello/discovery/custom"
 	"learn-go/kitex-hello/kitex_gen/pbapi"
 	"learn-go/kitex-hello/kitex_gen/pbapi/echo"
+	"log"
 	"strconv"
 	"sync"
 	"time"
 )
 
-var addrStrs = []string{":8888", ":9999"}
+var (
+	addrStrs  = []string{":8888", ":9999"}
+	pass      = "Pass"
+	noPassErr = errors.New("you shall not pass")
+)
 
 func main() {
+	//circuitbreaker
+	//基于异常数统计
+	opt := circuitbreaker.Options{
+		ShouldTrip: circuitbreaker.RateTripFunc(0.5, 20),
+	}
+	cbPanel, err := circuitbreaker.NewPanel(changeHandler, opt)
+	if err != nil {
+		log.Fatal(err)
+	}
+	cbCtrl := circuitbreak.Control{GetKey: getKey, GetErrorType: getErrorType, DecorateError: decorateError}
+	cbMW := circuitbreak.NewCircuitBreakerMW(cbCtrl, cbPanel)
+	//loadbalance
 	lb := loadbalance.NewWeightedBalancer()
 	//提高服务调用成功率, 有最大重试次数, 重试次数backoff等等配置
 	//retryPolicy := retry.NewFailurePolicy()
@@ -37,12 +57,14 @@ func main() {
 		//rpc timeout会重新resolve service instance address
 		client.WithRPCTimeout(3*time.Second),
 		client.WithConnectTimeout(30*time.Second),
+		client.WithMiddleware(cbMW),
+		client.WithMiddleware(newCircleBreakerFailureMW()),
 	)
 	if err != nil {
 		klog.Fatal(err)
 	}
 
-	syncEcho(client, 20)
+	syncEcho(client, 50)
 
 	//asyncEcho(client, 5)
 }
@@ -50,12 +72,20 @@ func main() {
 //同步调用
 func syncEcho(client echo.Client, times int) {
 	for i := 0; i < times; i++ {
+		ctx := context.Background()
+		if i >= 20 {
+			ctx = context.WithValue(ctx, pass, 1)
+		}
+
 		req := &pbapi.Request{Message: "hello" + strconv.Itoa(i)}
-		resp, err := client.Echo(context.Background(), req)
+		resp, err := client.Echo(ctx, req)
 		if err != nil {
 			klog.Infof("fatal error: %v\n", err)
+		} else {
+			klog.Infof("return: %v\n", resp)
 		}
-		klog.Infof("return: %v\n", resp)
+
+		time.Sleep(200 * time.Millisecond)
 	}
 }
 
@@ -122,11 +152,12 @@ func asyncEcho(client echo.Client, times int) {
 func newFailureMW() endpoint.Middleware {
 	return func(next endpoint.Endpoint) endpoint.Endpoint {
 		return func(ctx context.Context, req, resp any) (err error) {
-			//从context中取出重试key, 如果有则是重试请求, 没有则是正常请求
+			//从context中取出重试key(由一个metainfo.node存储), 如果有则是重试请求, 没有则是正常请求
 			if _, exist := metainfo.GetPersistentValue(ctx, retry.TransitKey); !exist {
 				println("you shall not pass")
-				return kerrors.ErrRPCTimeout.WithCause(errors.New("you shall not pass"))
+				return kerrors.ErrRPCTimeout.WithCause(noPassErr)
 			}
+
 			klog.Infof("this is a retry request")
 			return next(ctx, req, resp)
 		}
@@ -146,4 +177,40 @@ func newDelayMW(delay time.Duration) endpoint.Middleware {
 			return next(ctx, req, resp)
 		}
 	}
+}
+
+func newCircleBreakerFailureMW() endpoint.Middleware {
+	return func(next endpoint.Endpoint) endpoint.Endpoint {
+		return func(ctx context.Context, req, resp any) (err error) {
+			if _, exist := ctx.Value(pass).(int); !exist {
+				println("you shall not pass")
+				return kerrors.ErrRPCTimeout.WithCause(noPassErr)
+			}
+
+			return nil
+		}
+	}
+}
+
+//circle breaker相关
+func changeHandler(key string, oldState, newState circuitbreaker.State, m circuitbreaker.Metricer) {
+	log.Printf("circuitbreaker status change, old: %v, new: %v\n", oldState, newState)
+}
+
+func getKey(ctx context.Context, request interface{}) (key string, enabled bool) {
+	//从context里面取RPCInfo
+	rpcInfo := rpcinfo.GetRPCInfo(ctx)
+	//以服务名作为异常统计计数缓存key
+	return rpcInfo.To().ServiceName(), true
+}
+
+func getErrorType(ctx context.Context, request, response interface{}, err error) circuitbreak.ErrorType {
+	if err != nil {
+		return circuitbreak.TypeFailure
+	}
+	return circuitbreak.TypeSuccess
+}
+
+func decorateError(ctx context.Context, request interface{}, err error) error {
+	return err
 }
