@@ -34,6 +34,9 @@ func main() {
 		//client.WithMiddleware(newDelayMW((60 * time.Millisecond))),
 		client.WithLoadBalancer(lb),
 		client.WithResolver(custom.Resolver()),
+		//rpc timeout会重新resolve service instance address
+		client.WithRPCTimeout(3*time.Second),
+		client.WithConnectTimeout(30*time.Second),
 	)
 	if err != nil {
 		klog.Fatal(err)
@@ -50,7 +53,7 @@ func syncEcho(client echo.Client, times int) {
 		req := &pbapi.Request{Message: "hello" + strconv.Itoa(i)}
 		resp, err := client.Echo(context.Background(), req)
 		if err != nil {
-			klog.Fatalf("fatal error: %v\n", err)
+			klog.Infof("fatal error: %v\n", err)
 		}
 		klog.Infof("return: %v\n", resp)
 	}

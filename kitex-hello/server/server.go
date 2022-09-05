@@ -22,6 +22,8 @@ type EchoImpl struct {
 func (s *EchoImpl) Echo(ctx context.Context, req *pbapi.Request) (resp *pbapi.Response, err error) {
 	klog.Infof("%v >> echo called, received: %v", s.addr, req.GetMessage())
 	rand := rand.Intn(10) + 1
+	//timeout测试
+	//time.Sleep(time.Duration(rand) * 1000 * time.Millisecond)
 	time.Sleep(time.Duration(rand) * 100 * time.Millisecond)
 	return &pbapi.Response{Message: "service reply >> " + req.Message}, nil
 }
@@ -44,7 +46,12 @@ func startServer(wg sync.WaitGroup, addrStr string) {
 	defer wg.Done()
 
 	addr, _ := net.ResolveTCPAddr("tcp", addrStr)
-	server := echo.NewServer(&EchoImpl{addr: addrStr}, server.WithServiceAddr(addr))
+	server := echo.NewServer(
+		&EchoImpl{addr: addrStr},
+		server.WithServiceAddr(addr),
+		server.WithReadWriteTimeout(500*time.Millisecond),
+		server.WithMaxConnIdleTime(30*time.Second),
+	)
 
 	err := server.Run()
 
