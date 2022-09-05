@@ -42,7 +42,7 @@ func main() {
 		klog.Fatal(err)
 	}
 
-	syncEcho(client, 5)
+	syncEcho(client, 20)
 
 	//asyncEcho(client, 5)
 }

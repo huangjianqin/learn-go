@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"github.com/cloudwego/kitex/pkg/klog"
+	"github.com/cloudwego/kitex/pkg/limit"
 	"github.com/cloudwego/kitex/server"
 	"learn-go/kitex-hello/kitex_gen/pbapi"
 	"learn-go/kitex-hello/kitex_gen/pbapi/echo"
@@ -51,6 +52,8 @@ func startServer(wg sync.WaitGroup, addrStr string) {
 		server.WithServiceAddr(addr),
 		server.WithReadWriteTimeout(500*time.Millisecond),
 		server.WithMaxConnIdleTime(30*time.Second),
+		//每秒5个请求
+		server.WithLimit(&limit.Option{MaxConnections: 10000, MaxQPS: 5}),
 	)
 
 	err := server.Run()
