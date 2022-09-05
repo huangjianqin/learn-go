@@ -8,7 +8,9 @@ import (
 	"github.com/cloudwego/kitex/pkg/endpoint"
 	"github.com/cloudwego/kitex/pkg/kerrors"
 	"github.com/cloudwego/kitex/pkg/klog"
+	"github.com/cloudwego/kitex/pkg/loadbalance"
 	"github.com/cloudwego/kitex/pkg/retry"
+	"learn-go/kitex-hello/discovery/custom"
 	"learn-go/kitex-hello/kitex_gen/pbapi"
 	"learn-go/kitex-hello/kitex_gen/pbapi/echo"
 	"strconv"
@@ -16,23 +18,28 @@ import (
 	"time"
 )
 
+var addrStrs = []string{":8888", ":9999"}
+
 func main() {
+	lb := loadbalance.NewWeightedBalancer()
 	//提高服务调用成功率, 有最大重试次数, 重试次数backoff等等配置
 	//retryPolicy := retry.NewFailurePolicy()
 	//减少请求的网络波动影响, 即一段时间没有得到返回, 会额外进行rpc请求, 有重试延迟时间,最大重试次数等等配置
 	//backupPolicy := retry.NewBackupPolicy(50)
 	client, err := echo.NewClient("echo",
-		client.WithHostPorts(":8888"),
+		//client.WithHostPorts(addrStrs...),
 		//client.WithFailureRetry(retryPolicy),
 		//client.WithMiddleware(newFailureMW()),
 		//client.WithBackupRequest(backupPolicy),
 		//client.WithMiddleware(newDelayMW((60 * time.Millisecond))),
+		client.WithLoadBalancer(lb),
+		client.WithResolver(custom.Resolver()),
 	)
 	if err != nil {
 		klog.Fatal(err)
 	}
 
-	syncEcho(client, 1)
+	syncEcho(client, 5)
 
 	//asyncEcho(client, 5)
 }
@@ -111,7 +118,7 @@ func asyncEcho(client echo.Client, times int) {
 //middleware, 相当于interceptor
 func newFailureMW() endpoint.Middleware {
 	return func(next endpoint.Endpoint) endpoint.Endpoint {
-		return func(ctx context.Context, req, resp interface{}) (err error) {
+		return func(ctx context.Context, req, resp any) (err error) {
 			//从context中取出重试key, 如果有则是重试请求, 没有则是正常请求
 			if _, exist := metainfo.GetPersistentValue(ctx, retry.TransitKey); !exist {
 				println("you shall not pass")
@@ -125,7 +132,7 @@ func newFailureMW() endpoint.Middleware {
 
 func newDelayMW(delay time.Duration) endpoint.Middleware {
 	return func(next endpoint.Endpoint) endpoint.Endpoint {
-		return func(ctx context.Context, req, resp interface{}) (err error) {
+		return func(ctx context.Context, req, resp any) (err error) {
 			//从context中取出重试key, 如果有则是重试请求, 没有则是正常请求
 			if _, exist := metainfo.GetPersistentValue(ctx, retry.TransitKey); !exist {
 				time.Sleep(delay + 10*time.Millisecond)
